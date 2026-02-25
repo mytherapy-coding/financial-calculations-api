@@ -27,8 +27,13 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # Local FastAPI / Swagger
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        # Local static client (python -m http.server 3000)
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        # GitHub Pages
         "https://mytherapy-coding.github.io",
         "https://*.github.io",  # Allow all GitHub Pages domains
     ],
