@@ -2,6 +2,71 @@
 
 Stateless JSON API for financial calculations built with FastAPI.
 
+## Quickstart
+
+### Health Check
+```bash
+curl https://YOUR-RENDER-URL.onrender.com/v1/health
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "service": "finance-api",
+  "version": "v1"
+}
+```
+
+### Echo Endpoint
+```bash
+curl -X POST https://YOUR-RENDER-URL.onrender.com/v1/echo \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Hello, World!",
+    "number": 42
+  }'
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "echo": {
+    "message": "Hello, World!",
+    "number": 42
+  }
+}
+```
+
+### Calculate Future Value (Compound Interest)
+```bash
+curl -X POST https://YOUR-RENDER-URL.onrender.com/v1/tvm/future-value \
+  -H "Content-Type: application/json" \
+  -d '{
+    "principal": 10000,
+    "annual_rate": 0.07,
+    "years": 10,
+    "compounds_per_year": 12
+  }'
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "future_value": 19671.51
+}
+```
+
+**Note:** Replace `YOUR-RENDER-URL.onrender.com` with your actual Render deployment URL.
+
+### Interactive API Documentation
+
+Visit `/docs` in your browser for interactive Swagger UI documentation:
+- Local: http://127.0.0.1:8000/docs
+- Production: https://YOUR-RENDER-URL.onrender.com/docs
+
 ## Setup
 
 ### 1. Create virtual environment
@@ -36,18 +101,36 @@ The server will start at `http://127.0.0.1:8000`
 
 ### Health Check
 - **GET** `/v1/health`
-- Returns: `{"ok": true, "service": "finance-api", "version": "v1"}`
+- **Description:** Check if the API service is running and healthy
+- **Response:** `{"ok": true, "service": "finance-api", "version": "v1"}`
 
 ### Echo
 - **POST** `/v1/echo`
-- Request body:
+- **Description:** Echo back the request payload. Useful for testing API connectivity.
+- **Request body:**
   ```json
   {
     "message": "string",
     "number": 123  // optional
   }
   ```
-- Returns: `{"ok": true, "echo": {...}}`
+- **Response:** `{"ok": true, "echo": {...}}`
+
+### Future Value (Compound Interest)
+- **POST** `/v1/tvm/future-value`
+- **Description:** Calculate the future value of an investment using compound interest.
+- **Formula:** FV = P × (1 + r/n)^(n×t)
+- **Request body:**
+  ```json
+  {
+    "principal": 10000,
+    "annual_rate": 0.07,  // 7% as decimal (not 7)
+    "years": 10,
+    "compounds_per_year": 12  // monthly
+  }
+  ```
+- **Response:** `{"ok": true, "future_value": 19671.51}`
+- **Note:** `annual_rate` must be a decimal (0.07 for 7%, not 7)
 
 ## Testing
 
