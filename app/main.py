@@ -587,14 +587,35 @@ def _calculate_bond_yield(face_value, coupon_rate, years_to_maturity, current_pr
         pv_face = face_value / ((1 + yield_rate / payments_per_year) ** total_payments)
         return pv_coupons + pv_face - current_price
     
-    # Use root finding to solve for yield
-    try:
-        result = root_scalar(bond_present_value, bracket=[0.0, 1.0], method='brentq')
-        return result.root
-    except ValueError:
-        # Fallback to fsolve
-        result = fsolve(bond_present_value, 0.05)
-        return float(result[0])
+    # Use scipy if available (more accurate)
+    if SCIPY_AVAILABLE:
+        try:
+            result = root_scalar(bond_present_value, bracket=[0.0, 1.0], method='brentq')
+            return result.root
+        except ValueError:
+            # Fallback to fsolve
+            result = fsolve(bond_present_value, 0.05)
+            return float(result[0])
+    else:
+        # Fallback: Simple bisection method (no scipy required)
+        low, high = 0.0, 1.0
+        tolerance = 1e-6
+        max_iterations = 100
+        
+        for _ in range(max_iterations):
+            mid = (low + high) / 2
+            pv = bond_present_value(mid)
+            
+            if abs(pv) < tolerance:
+                return mid
+            
+            if pv > 0:
+                low = mid
+            else:
+                high = mid
+        
+        # Return best guess if convergence not reached
+        return (low + high) / 2
 
 @app.post("/v1/bond/yield", 
           response_model=BondYieldResponse,
@@ -631,19 +652,7 @@ def calculate_bond_yield(payload: BondYieldRequest):
     }
     ```
     """
-    if not SCIPY_AVAILABLE:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "ok": False,
-                "error": {
-                    "code": "SCIPY_NOT_AVAILABLE",
-                    "message": "scipy is required for bond yield calculation but is not installed",
-                    "details": ["Install scipy with: pip install scipy"]
-                }
-            }
-        )
-    
+    # Note: Bond yield now works without scipy (uses bisection method as fallback)
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(
@@ -697,14 +706,39 @@ def _calculate_xirr(cashflows, initial_guess):
             total += cf.amount / ((1 + rate) ** years)
         return total
     
-    # Use root finding to solve for XIRR
-    try:
-        result = root_scalar(npv, bracket=[-0.99, 10.0], method='brentq', x0=initial_guess)
-        return result.root
-    except ValueError:
-        # Fallback to fsolve
-        result = fsolve(npv, initial_guess)
-        return float(result[0])
+    # Use scipy if available (more accurate)
+    if SCIPY_AVAILABLE:
+        try:
+            result = root_scalar(npv, bracket=[-0.99, 10.0], method='brentq', x0=initial_guess)
+            return result.root
+        except ValueError:
+            # Fallback to fsolve
+            result = fsolve(npv, initial_guess)
+            return float(result[0])
+    else:
+        # Fallback: Simple bisection method (no scipy required)
+        low, high = -0.99, 10.0
+        tolerance = 1e-6
+        max_iterations = 100
+        
+        # Adjust bounds if initial guess suggests different range
+        if initial_guess > 0 and initial_guess < 1:
+            low, high = -0.5, 2.0
+        
+        for _ in range(max_iterations):
+            mid = (low + high) / 2
+            npv_value = npv(mid)
+            
+            if abs(npv_value) < tolerance:
+                return mid
+            
+            if npv_value > 0:
+                low = mid
+            else:
+                high = mid
+        
+        # Return best guess if convergence not reached
+        return (low + high) / 2
 
 @app.post("/v1/xirr", 
           response_model=XIRRResponse,
@@ -745,19 +779,7 @@ def calculate_xirr(payload: XIRRRequest):
     }
     ```
     """
-    if not SCIPY_AVAILABLE:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "ok": False,
-                "error": {
-                    "code": "SCIPY_NOT_AVAILABLE",
-                    "message": "scipy is required for XIRR calculation but is not installed",
-                    "details": ["Install scipy with: pip install scipy"]
-                }
-            }
-        )
-    
+    # Note: XIRR now works without scipy (uses bisection method as fallback)
     # Guard: Check cashflow count
     if len(payload.cashflows) > MAX_XIRR_CASHFLOWS:
         raise HTTPException(
