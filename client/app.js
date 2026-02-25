@@ -1,4 +1,4 @@
-const API_BASE = "https://YOUR-RENDER-URL.onrender.com"; // replace with your Render URL
+const API_BASE = "https://financial-calculations-api.onrender.com";
 
 const out = document.getElementById("out");
 const show = (obj) => (out.textContent = JSON.stringify(obj, null, 2));
