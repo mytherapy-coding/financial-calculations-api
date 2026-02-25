@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 app = FastAPI(
     title="Finance Calculations API",
@@ -42,6 +42,31 @@ class EchoResponse(BaseModel):
     ok: bool
     echo: EchoRequest
 
+# Time Value of Money Models
+class FutureValueRequest(BaseModel):
+    """Request model for compound interest future value calculation.
+    
+    Note: annual_rate is a decimal (e.g., 0.07 for 7%, not 7).
+    """
+    principal: float = Field(..., ge=0, description="Initial principal amount (must be >= 0)")
+    annual_rate: float = Field(..., ge=0, le=1, description="Annual interest rate as decimal (e.g., 0.07 for 7%)")
+    years: float = Field(..., gt=0, description="Number of years (must be > 0)")
+    compounds_per_year: int = Field(..., gt=0, description="Number of compounding periods per year (must be > 0)")
+    
+    @field_validator('annual_rate')
+    @classmethod
+    def validate_rate(cls, v):
+        """Validate that rate is reasonable (0-100% as decimal)."""
+        if v < 0:
+            raise ValueError('annual_rate must be >= 0')
+        if v > 1:
+            raise ValueError('annual_rate must be <= 1 (100%). If you meant a percentage, convert to decimal (e.g., 7% = 0.07)')
+        return v
+
+class FutureValueResponse(BaseModel):
+    ok: bool
+    future_value: float
+
 # Exception Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -70,3 +95,38 @@ def health():
 @app.post("/v1/echo", response_model=EchoResponse)
 def echo(payload: EchoRequest):
     return {"ok": True, "echo": payload}
+
+@app.post("/v1/tvm/future-value", response_model=FutureValueResponse)
+def calculate_future_value(payload: FutureValueRequest):
+    """
+    Calculate the future value of an investment using compound interest.
+    
+    Formula: FV = P * (1 + r/n)^(n*t)
+    Where:
+    - P = principal
+    - r = annual_rate (as decimal, e.g., 0.07 for 7%)
+    - n = compounds_per_year
+    - t = years
+    
+    Example:
+    - principal: 10000
+    - annual_rate: 0.07 (7%)
+    - years: 10
+    - compounds_per_year: 12 (monthly)
+    
+    Returns the future value rounded to 2 decimal places.
+    """
+    principal = payload.principal
+    annual_rate = payload.annual_rate
+    years = payload.years
+    compounds_per_year = payload.compounds_per_year
+    
+    # Calculate compound interest: FV = P * (1 + r/n)^(n*t)
+    rate_per_period = annual_rate / compounds_per_year
+    total_periods = compounds_per_year * years
+    future_value = principal * (1 + rate_per_period) ** total_periods
+    
+    # Round to 2 decimal places
+    future_value = round(future_value, 2)
+    
+    return {"ok": True, "future_value": future_value}
