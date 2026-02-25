@@ -7,7 +7,15 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import math
 from datetime import datetime
 from typing import List
-from scipy.optimize import fsolve, root_scalar
+
+# Optional scipy import for advanced calculations
+try:
+    from scipy.optimize import fsolve, root_scalar
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    fsolve = None
+    root_scalar = None
 
 app = FastAPI(
     title="Finance Calculations API",
@@ -618,6 +626,19 @@ def calculate_bond_yield(payload: BondYieldRequest):
     }
     ```
     """
+    if not SCIPY_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "SCIPY_NOT_AVAILABLE",
+                    "message": "scipy is required for bond yield calculation but is not installed",
+                    "details": ["Install scipy with: pip install scipy"]
+                }
+            }
+        )
+    
     try:
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(
@@ -719,6 +740,19 @@ def calculate_xirr(payload: XIRRRequest):
     }
     ```
     """
+    if not SCIPY_AVAILABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "SCIPY_NOT_AVAILABLE",
+                    "message": "scipy is required for XIRR calculation but is not installed",
+                    "details": ["Install scipy with: pip install scipy"]
+                }
+            }
+        )
+    
     # Guard: Check cashflow count
     if len(payload.cashflows) > MAX_XIRR_CASHFLOWS:
         raise HTTPException(
