@@ -1,12 +1,26 @@
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
     title="Finance Calculations API",
     version="1.0.0",
     description="Stateless JSON API for financial calculations"
+)
+
+# CORS Middleware - Allow requests from GitHub Pages and localhost
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://mytherapy-coding.github.io",
+        "https://*.github.io",  # Allow all GitHub Pages domains
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Standard Error Response Models

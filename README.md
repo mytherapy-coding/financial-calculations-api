@@ -111,6 +111,71 @@ curl -X POST http://127.0.0.1:8000/v1/echo \
 
 The project includes a `render.yaml` file for automatic configuration. When creating a new service, Render will detect and use this file automatically.
 
+## Web Client
+
+A simple web client is included in the `client/` directory that can call the API from a browser.
+
+### Setup Client
+
+1. **Update API URL** in `client/app.js`:
+   ```javascript
+   const API_BASE = "https://YOUR-RENDER-URL.onrender.com"; // Replace with your Render URL
+   ```
+
+2. **Test locally**:
+   - Open `client/index.html` in your browser
+   - Click "Check Health" or "Send Echo" buttons
+   - Make sure your Render API is deployed and CORS is configured
+
+### Deploy to GitHub Pages
+
+1. **Push client files to GitHub** (already in the repo)
+
+2. **Enable GitHub Pages**:
+   - Go to your repository on GitHub
+   - Settings → Pages
+   - Source: Select "Deploy from a branch"
+   - Branch: `main` (or `gh-pages`)
+   - Folder: `/client` (or `/root` if client is at root)
+   - Click "Save"
+
+3. **Update CORS in Backend**:
+   - The backend already includes CORS middleware
+   - Make sure your GitHub Pages URL is in the `allow_origins` list in `app/main.py`
+   - Example: `"https://mytherapy-coding.github.io"`
+
+4. **Verify Deployment**:
+   - Your client will be available at: `https://<username>.github.io/<repo-name>/client/`
+   - Or if using a custom domain: `https://yourdomain.com`
+
+### Client Features
+
+- **Health Check**: Tests the `/v1/health` endpoint
+- **Echo**: Sends a POST request to `/v1/echo` with sample data
+- **JSON Display**: Shows formatted JSON responses
+
+### CORS Configuration
+
+The backend includes CORS middleware to allow requests from:
+- Localhost (for development)
+- GitHub Pages domains (`*.github.io`)
+- Your specific GitHub Pages URL
+
+If you need to add more origins, update `app/main.py`:
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://YOURNAME.github.io",  # Add your GitHub Pages URL
+        "https://*.github.io",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
 ## Project Structure
 
 ```
@@ -118,6 +183,10 @@ financial-calculations-api/
 ├── app/
 │   ├── __init__.py
 │   └── main.py
+├── client/
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
 ├── requirements.txt
 ├── render.yaml
 └── README.md
