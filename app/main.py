@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -7,6 +9,17 @@ app = FastAPI(
     description="Stateless JSON API for financial calculations"
 )
 
+# Standard Error Response Models
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+    details: list = []
+
+class ErrorResponse(BaseModel):
+    ok: bool = False
+    error: ErrorDetail
+
+# Request/Response Models
 class EchoRequest(BaseModel):
     message: str
     number: int | None = None
@@ -14,6 +27,27 @@ class EchoRequest(BaseModel):
 class EchoResponse(BaseModel):
     ok: bool
     echo: EchoRequest
+
+# Exception Handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle FastAPI validation errors and return consistent error format."""
+    details = []
+    for error in exc.errors():
+        field = " -> ".join(str(loc) for loc in error["loc"])
+        details.append(f"{field}: {error['msg']}")
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "ok": False,
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": details
+            }
+        }
+    )
 
 @app.get("/v1/health")
 def health():
