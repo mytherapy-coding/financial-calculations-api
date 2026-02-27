@@ -820,6 +820,23 @@ class XIRRResponse(BaseModel):
     ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
     xirr: float = Field(..., description="Extended Internal Rate of Return as decimal (e.g., 0.15 for 15%)", examples=[0.15, 0.20])
 
+
+class XIRRExplainResponse(BaseModel):
+    """Response model for XIRR explanation."""
+
+    ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
+    xirr: float = Field(..., description="Computed XIRR as decimal (e.g., 0.15 for 15%)", examples=[0.15])
+    iterations: int = Field(..., description="Number of iterations used by the solver", examples=[25])
+    solver_type: str = Field(
+        ...,
+        description="Solver used (e.g., 'scipy-brentq' or 'bisection')",
+        examples=["scipy-brentq"],
+    )
+    warnings: List[str] = Field(
+        default_factory=list,
+        description="List of warnings about the solution (e.g., potential multiple IRRs).",
+    )
+
 @app.post("/v1/mortgage/payment", 
           response_model=MortgagePaymentResponse,
           summary="Calculate Mortgage Payment",
@@ -1213,7 +1230,17 @@ def calculate_bond_price(payload: BondPriceRequest):
     return {"ok": True, "price": round(price, 4)}
 
 def _calculate_xirr(cashflows, initial_guess):
-    """Calculate XIRR using numerical solver."""
+    """Calculate XIRR using numerical solver.
+
+    Returns only the XIRR value (used by the main /v1/xirr endpoint).
+    For more details, use `_calculate_xirr_with_meta`.
+    """
+    rate, _meta = _calculate_xirr_with_meta(cashflows, initial_guess)
+    return rate
+
+
+def _calculate_xirr_with_meta(cashflows, initial_guess):
+    """Calculate XIRR and return (rate, meta) for explanation purposes."""
     # Parse dates and calculate days from first date
     dates = [datetime.strptime(cf.date, "%Y-%m-%d") for cf in cashflows]
     first_date = dates[0]
@@ -1227,6 +1254,29 @@ def _calculate_xirr(cashflows, initial_guess):
             total += cf.amount / ((1 + rate) ** years)
         return total
     
+    meta = {
+        "iterations": 0,
+        "solver_type": "",
+        "warnings": [],
+    }
+
+    # Detect potential multiple sign changes (multiple possible IRRs).
+    signs = []
+    test_rates = [-0.9, -0.5, 0.0, 0.1, 0.5, 1.0, 2.0]
+    for r in test_rates:
+        try:
+            val = npv(r)
+            signs.append(1 if val > 0 else -1 if val < 0 else 0)
+        except Exception:
+            continue
+    non_zero_signs = [s for s in signs if s != 0]
+    if len(non_zero_signs) >= 2 and any(
+        non_zero_signs[i] != non_zero_signs[i - 1] for i in range(1, len(non_zero_signs))
+    ):
+        meta["warnings"].append(
+            "Multiple sign changes in NPV over sample rates → multiple possible IRRs may exist."
+        )
+
     # Default bracket for XIRR search
     low, high = -0.99, 10.0
 
@@ -1264,22 +1314,28 @@ def _calculate_xirr(cashflows, initial_guess):
     if SCIPY_AVAILABLE:
         try:
             result = root_scalar(npv, bracket=[low, high], method="brentq", x0=initial_guess)
-            return result.root
+            meta["solver_type"] = "scipy-brentq"
+            # root_scalar doesn't expose iterations directly; leave as 0 / unknown.
+            return result.root, meta
         except ValueError:
             # Fallback to fsolve
             result = fsolve(npv, initial_guess)
-            return float(result[0])
+            meta["solver_type"] = "scipy-fsolve"
+            return float(result[0]), meta
     else:
         # Fallback: Simple bisection method (no scipy required)
         tolerance = 1e-6
         max_iterations = 100
 
-        for _ in range(max_iterations):
+        meta["solver_type"] = "bisection"
+
+        for i in range(max_iterations):
             mid = (low + high) / 2
             npv_value = npv(mid)
 
             if abs(npv_value) < tolerance:
-                return mid
+                meta["iterations"] = i + 1
+                return mid, meta
 
             if npv_value > 0:
                 low = mid
@@ -1374,6 +1430,84 @@ def calculate_xirr(payload: XIRRRequest):
                     "details": []
                 }
             }
+        )
+
+
+@app.post(
+    "/v1/xirr/explain",
+    response_model=XIRRExplainResponse,
+    summary="Calculate XIRR with explanation",
+    description=(
+        "Calculate XIRR and return additional metadata such as solver type, "
+        "iteration count, and numerical warnings."
+    ),
+    response_description="XIRR explanation",
+    tags=["Time Value of Money"],
+)
+def explain_xirr(payload: XIRRRequest):
+    """
+    XIRR explanation endpoint.
+
+    Returns:
+    - `xirr`: computed rate
+    - `iterations`: number of iterations used (for the bisection fallback)
+    - `solver_type`: which solver was used (`scipy-brentq`, `scipy-fsolve`, or `bisection`)
+    - `warnings`: list of numerical warnings, e.g. potential multiple IRRs
+    """
+    if len(payload.cashflows) > MAX_XIRR_CASHFLOWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "TOO_MANY_CASHFLOWS",
+                    "message": f"Maximum {MAX_XIRR_CASHFLOWS} cash flows allowed",
+                    "details": [f"Received {len(payload.cashflows)} cash flows"],
+                },
+            },
+        )
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                _calculate_xirr_with_meta,
+                payload.cashflows,
+                payload.initial_guess,
+            )
+            rate, meta = future.result(timeout=SOLVER_TIMEOUT_SECONDS)
+
+        return {
+            "ok": True,
+            "xirr": round(rate, 6),
+            "iterations": int(meta.get("iterations") or 0),
+            "solver_type": meta.get("solver_type") or "",
+            "warnings": meta.get("warnings") or [],
+        }
+    except FutureTimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "SOLVER_TIMEOUT",
+                    "message": f"Solver exceeded timeout of {SOLVER_TIMEOUT_SECONDS} seconds",
+                    "details": [],
+                },
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "SOLVER_ERROR",
+                    "message": f"Failed to calculate XIRR: {str(e)}",
+                    "details": [],
+                },
+            },
         )
     except HTTPException:
         # Let HTTP exceptions bubble up so the unified handler can format them.
