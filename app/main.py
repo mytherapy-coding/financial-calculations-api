@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
+import os
 
 # Optional scipy import for advanced calculations
 try:
@@ -43,6 +44,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Metadata for /v1/info endpoint
+BUILD_TIMESTAMP = datetime.now(timezone.utc).isoformat()
+GIT_SHA = os.getenv("GIT_SHA", "unknown")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
 # Standard Error Response Models
 class ErrorDetail(BaseModel):
@@ -209,22 +215,51 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         },
     )
 
-@app.get("/v1/health", 
-         summary="Health Check",
-         description="Check if the API service is running and healthy.",
-         response_description="Service health status",
-         tags=["System"])
+@app.get(
+    "/v1/health",
+    summary="Health Check",
+    description="Check if the API service is running and healthy.",
+    response_description="Service health status",
+    tags=["System"],
+)
 def health():
     """
     Health check endpoint.
-    
+
     Returns the current status of the API service including:
     - Service name
     - API version
-    
+
     Use this endpoint to verify the API is operational.
     """
     return {"ok": True, "service": "finance-api", "version": "v1"}
+
+
+@app.get(
+    "/v1/info",
+    summary="Service Info",
+    description="Return metadata about the running service (useful for debugging).",
+    response_description="Service metadata",
+    tags=["System"],
+)
+def info():
+    """
+    Service info endpoint.
+
+    Returns metadata useful for debugging and operations, such as:
+    - API version
+    - Environment (e.g. production, staging, local)
+    - Build timestamp (UTC)
+    - Git SHA (if provided via env var `GIT_SHA`)
+    """
+    return {
+        "ok": True,
+        "service": "finance-api",
+        "version": app.version,
+        "environment": ENVIRONMENT,
+        "build_timestamp": BUILD_TIMESTAMP,
+        "git_sha": GIT_SHA,
+    }
 
 @app.post("/v1/echo", 
           response_model=EchoResponse,
