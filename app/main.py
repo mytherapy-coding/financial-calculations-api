@@ -17,26 +17,29 @@ except ImportError:
     fsolve = None
     root_scalar = None
 
+# CORS configuration
+# Update ALLOWED_ORIGINS when adding new frontends (e.g. another GitHub Pages site).
+ALLOWED_ORIGINS = [
+    # Local FastAPI / Swagger
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    # Local static client (python -m http.server 3000)
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    # GitHub Pages for this project
+    "https://mytherapy-coding.github.io",
+]
+
 app = FastAPI(
     title="Finance Calculations API",
     version="1.0.0",
     description="Stateless JSON API for financial calculations"
 )
 
-# CORS Middleware - Allow requests from GitHub Pages and localhost
+# CORS Middleware - allow only known frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        # Local FastAPI / Swagger
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        # Local static client (python -m http.server 3000)
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        # GitHub Pages
-        "https://mytherapy-coding.github.io",
-        "https://*.github.io",  # Allow all GitHub Pages domains
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

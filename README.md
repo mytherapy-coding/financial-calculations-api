@@ -239,25 +239,43 @@ A simple web client is included in the `client/` directory that can call the API
 
 ### CORS Configuration
 
-The backend includes CORS middleware to allow requests from:
-- Localhost (for development)
-- GitHub Pages domains (`*.github.io`)
-- Your specific GitHub Pages URL
+The backend includes CORS middleware with a **strict allowlist** of frontends that are allowed to call the API.
 
-If you need to add more origins, update `app/main.py`:
+By default, the following origins are allowed:
+- Local development:
+  - `http://localhost:8000`
+  - `http://127.0.0.1:8000`
+  - `http://localhost:3000`
+  - `http://127.0.0.1:3000`
+- GitHub Pages for this project:
+  - `https://mytherapy-coding.github.io`
+
+If you add another frontend (for example, a different GitHub Pages site or a custom domain), update `ALLOWED_ORIGINS` in `app/main.py`:
+
 ```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://YOURNAME.github.io",  # Add your GitHub Pages URL
-        "https://*.github.io",
-    ],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    # Add your GitHub Pages or custom domains here:
+    "https://YOURNAME.github.io",
+]
 ```
+
+> Note: `allow_origins` does **not** support wildcards like `"https://*.github.io"` in the way you might expect.  
+> If you really want to allow any `username.github.io` (but not other domains), you can use `allow_origin_regex`, for example:
+>
+> ```python
+> app.add_middleware(
+>     CORSMiddleware,
+>     allow_origin_regex=r"https://[a-zA-Z0-9-]+\.github\.io",
+>     allow_methods=["*"],
+>     allow_headers=["*"],
+> )
+> ```
+>
+> For most cases, a strict `ALLOWED_ORIGINS` list is safer and easier to reason about.
 
 ## Project Structure
 
