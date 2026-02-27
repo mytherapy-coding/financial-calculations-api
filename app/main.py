@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import List
 import os
 
@@ -454,6 +454,28 @@ class AmortizationScheduleResponse(BaseModel):
     total_payments: int = Field(..., description="Total number of payments")
     schedule: List[AmortizationPayment] = Field(..., description="Amortization schedule (limited by max_months)")
 
+
+class MortgageSummaryRequest(MortgagePaymentRequest):
+    """Request model for mortgage summary calculation.
+
+    Reuses the same fields and validation as `MortgagePaymentRequest`.
+    """
+
+
+class MortgageSummaryResponse(BaseModel):
+    """Response model for mortgage summary calculation."""
+
+    ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
+    monthly_payment: float = Field(..., description="Monthly payment amount", examples=[1432.25])
+    total_paid: float = Field(..., description="Total amount paid over the life of the loan", examples=[515610.0])
+    total_interest: float = Field(..., description="Total interest paid over the life of the loan", examples=[215610.0])
+    payoff_months: int = Field(..., description="Number of months until payoff", examples=[360])
+    payoff_date: str = Field(
+        ...,
+        description="Estimated payoff date in YYYY-MM format, assuming payments start this month",
+        examples=["2054-01"],
+    )
+
 # Bond Models
 class BondYieldRequest(BaseModel):
     """Request model for bond yield calculation."""
@@ -701,6 +723,64 @@ def generate_amortization_schedule(payload: AmortizationScheduleRequest):
         "monthly_payment": round(monthly_payment, 2),
         "total_payments": total_payments,
         "schedule": schedule
+    }
+
+
+@app.post(
+    "/v1/mortgage/summary",
+    response_model=MortgageSummaryResponse,
+    summary="Calculate Mortgage Summary",
+    description=(
+        "Calculate key mortgage metrics including monthly payment, total paid, "
+        "total interest, and payoff month count/date."
+    ),
+    response_description="Mortgage summary",
+    tags=["Mortgage"],
+)
+def mortgage_summary(payload: MortgageSummaryRequest):
+    """
+    Mortgage summary endpoint.
+
+    Returns human-friendly mortgage information:
+    - `monthly_payment`: monthly payment amount
+    - `total_paid`: total amount paid over the life of the loan
+    - `total_interest`: interest portion of `total_paid`
+    - `payoff_months`: number of months until payoff
+    - `payoff_date`: estimated payoff date in `YYYY-MM` format,
+      assuming payments start this month
+    """
+    principal = payload.principal
+    annual_rate = payload.annual_rate
+    years = payload.years
+
+    monthly_rate = annual_rate / 12
+    payoff_months = int(years * 12)
+
+    if monthly_rate == 0:
+        monthly_payment = principal / payoff_months
+    else:
+        monthly_payment = principal * (monthly_rate * (1 + monthly_rate) ** payoff_months) / (
+            (1 + monthly_rate) ** payoff_months - 1
+        )
+
+    total_paid = monthly_payment * payoff_months
+    total_interest = total_paid - principal
+
+    # Estimate payoff date as last payment month relative to the current month.
+    today = date.today().replace(day=1)
+    # We want the month of the last payment, so use payoff_months - 1 offset.
+    total_month_index = (today.year * 12 + (today.month - 1)) + (payoff_months - 1)
+    payoff_year = total_month_index // 12
+    payoff_month = total_month_index % 12 + 1
+    payoff_date_str = f"{payoff_year:04d}-{payoff_month:02d}"
+
+    return {
+        "ok": True,
+        "monthly_payment": round(monthly_payment, 2),
+        "total_paid": round(total_paid, 2),
+        "total_interest": round(total_interest, 2),
+        "payoff_months": payoff_months,
+        "payoff_date": payoff_date_str,
     }
 
 def _calculate_bond_yield(face_value, coupon_rate, years_to_maturity, current_price, payments_per_year):
