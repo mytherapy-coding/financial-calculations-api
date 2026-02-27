@@ -12,10 +12,10 @@
 
 ## After Getting Render URL
 
-Once you have your Render URL, update `client/app.js`:
+Once you have your Render URL, update `docs/app.js`:
 - Replace `YOUR-RENDER-URL.onrender.com` with your actual URL
 - Commit and push
-- Enable GitHub Pages (Settings → Pages → /client folder)
+- Enable GitHub Pages (Settings → Pages → /docs folder)
 
 ## Test Deployment
 

@@ -26,10 +26,10 @@
 ## ✅ GitHub Pages Client
 
 ### Requirements Met:
-- ✅ Client directory exists: `client/`
-- ✅ `client/index.html` - HTML structure with buttons
-- ✅ `client/app.js` - JavaScript to call API endpoints
-- ✅ `client/style.css` - Styling
+- ✅ Client directory exists: `docs/`
+- ✅ `docs/index.html` - HTML structure with buttons
+- ✅ `docs/app.js` - JavaScript to call API endpoints
+- ✅ `docs/style.css` - Styling
 - ✅ CORS middleware configured in backend for GitHub Pages domains
 
 ### Client Features:
@@ -40,9 +40,9 @@
 ### To Deploy:
 1. Go to repository Settings → Pages
 2. Source: Deploy from branch `main`
-3. Folder: `/client`
+3. Folder: `/docs`
 4. Save
-5. Client will be available at: `https://<username>.github.io/<repo-name>/client/`
+5. Client will be available at: `https://<username>.github.io/<repo-name>/`
 
 ### Important:
 - Update `API_BASE` in `client/app.js` with your Render URL before deploying
@@ -99,8 +99,8 @@ https://<your-service>.onrender.com/docs
 ### 2. GitHub Pages
 ```bash
 # After enabling GitHub Pages:
-# 1. Update client/app.js with Render URL
-# 2. Open: https://<username>.github.io/<repo-name>/client/
+# 1. Update docs/app.js with Render URL
+# 2. Open: https://<username>.github.io/<repo-name>/
 # 3. Click "Check Health" - should show JSON response
 # 4. Click "Send Echo" - should show echo response
 ```
@@ -131,7 +131,7 @@ uvicorn app.main:app --reload
 - `/docs` endpoint exists (FastAPI auto-generates)
 
 ✅ GitHub Pages client ready (needs deployment)
-- Client files exist
+- Client files exist in `docs/`
 - Buttons call API
 - JSON display works
 
@@ -142,7 +142,7 @@ uvicorn app.main:app --reload
 
 **Next Steps:**
 1. Deploy to Render and get Render URL
-2. Update `client/app.js` with Render URL
+2. Update `docs/app.js` with Render URL
 3. Enable GitHub Pages
 4. Test both deployments
 5. Verify CI runs successfully

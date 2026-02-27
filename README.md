@@ -196,17 +196,17 @@ The project includes a `render.yaml` file for automatic configuration. When crea
 
 ## Web Client
 
-A simple web client is included in the `client/` directory that can call the API from a browser.
+A simple web client is included in the `docs/` directory that can call the API from a browser.
 
 ### Setup Client
 
-1. **Update API URL** in `client/app.js`:
+1. **Update API URL** in `docs/app.js`:
    ```javascript
    const API_BASE = "https://YOUR-RENDER-URL.onrender.com"; // Replace with your Render URL
    ```
 
 2. **Test locally**:
-   - Open `client/index.html` in your browser
+- Open `docs/index.html` in your browser
    - Click "Check Health" or "Send Echo" buttons
    - Make sure your Render API is deployed and CORS is configured
 
@@ -218,17 +218,17 @@ A simple web client is included in the `client/` directory that can call the API
    - Go to your repository on GitHub
    - Settings → Pages
    - Source: Select "Deploy from a branch"
-   - Branch: `main` (or `gh-pages`)
-   - Folder: `/client` (or `/root` if client is at root)
+   - Branch: `main`
+   - Folder: `/docs`
    - Click "Save"
 
 3. **Update CORS in Backend**:
    - The backend already includes CORS middleware
-   - Make sure your GitHub Pages URL is in the `allow_origins` list in `app/main.py`
+   - Make sure your GitHub Pages URL is in the `ALLOWED_ORIGINS` list in `app/main.py`
    - Example: `"https://mytherapy-coding.github.io"`
 
 4. **Verify Deployment**:
-   - Your client will be available at: `https://<username>.github.io/<repo-name>/client/`
+   - Your client will be available at: `https://<username>.github.io/<repo-name>/`
    - Or if using a custom domain: `https://yourdomain.com`
 
 ### Client Features
@@ -284,11 +284,17 @@ financial-calculations-api/
 ├── app/
 │   ├── __init__.py
 │   └── main.py
-├── client/
+├── docs/                 # Web client (served by GitHub Pages)
 │   ├── index.html
 │   ├── app.js
 │   └── style.css
-├── requirements.txt
+├── tests/                # Pytest test suite
+├── .github/workflows/    # CI workflow
+├── CONCEPTS.md
+├── DEPLOY.md
+├── LICENSE
+├── PHASE1_CHECKLIST.md
+├── README.md
 ├── render.yaml
-└── README.md
+└── requirements.txt
 ```
