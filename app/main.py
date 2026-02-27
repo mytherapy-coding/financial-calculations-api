@@ -50,6 +50,12 @@ BUILD_TIMESTAMP = datetime.now(timezone.utc).isoformat()
 GIT_SHA = os.getenv("GIT_SHA", "unknown")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
+# Constants for guards
+MAX_AMORTIZATION_MONTHS = 600
+MAX_XIRR_CASHFLOWS = 1000
+MAX_AMOUNT = 1e12  # Maximum absolute monetary amount accepted by the API
+SOLVER_TIMEOUT_SECONDS = 5
+
 # Standard Error Response Models
 class ErrorDetail(BaseModel):
     code: str
@@ -89,10 +95,11 @@ class FutureValueRequest(BaseModel):
     Note: annual_rate is a decimal (e.g., 0.07 for 7%, not 7).
     """
     principal: float = Field(
-        ..., 
-        ge=0, 
-        description="Initial principal amount (must be >= 0)",
-        examples=[10000, 5000, 25000]
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Initial principal amount (must be >= 0 and <= MAX_AMOUNT)",
+        examples=[10000, 5000, 25000],
     )
     annual_rate: float = Field(
         ..., 
@@ -367,7 +374,13 @@ def calculate_future_value(payload: FutureValueRequest):
 # Mortgage Models
 class MortgagePaymentRequest(BaseModel):
     """Request model for mortgage payment calculation."""
-    principal: float = Field(..., ge=0, description="Loan principal amount (must be >= 0)", examples=[300000, 500000])
+    principal: float = Field(
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Loan principal amount (must be >= 0 and <= MAX_AMOUNT)",
+        examples=[300000, 500000],
+    )
     annual_rate: float = Field(..., ge=0, le=1, description="Annual interest rate as decimal (e.g., 0.04 for 4%)", examples=[0.04, 0.05, 0.06])
     years: float = Field(..., gt=0, description="Loan term in years (must be > 0)", examples=[15, 30])
     
@@ -396,7 +409,13 @@ class MortgagePaymentResponse(BaseModel):
 
 class AmortizationScheduleRequest(BaseModel):
     """Request model for amortization schedule calculation."""
-    principal: float = Field(..., ge=0, description="Loan principal amount (must be >= 0)", examples=[300000, 500000])
+    principal: float = Field(
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Loan principal amount (must be >= 0 and <= MAX_AMOUNT)",
+        examples=[300000, 500000],
+    )
     annual_rate: float = Field(..., ge=0, le=1, description="Annual interest rate as decimal", examples=[0.04, 0.05])
     years: float = Field(..., gt=0, description="Loan term in years (must be > 0)", examples=[15, 30])
     max_months: int = Field(600, ge=1, le=600, description="Maximum number of months to return (default: 600, max: 600)", examples=[360, 600])
@@ -438,10 +457,22 @@ class AmortizationScheduleResponse(BaseModel):
 # Bond Models
 class BondYieldRequest(BaseModel):
     """Request model for bond yield calculation."""
-    face_value: float = Field(..., gt=0, description="Face value of the bond (must be > 0)", examples=[1000, 10000])
+    face_value: float = Field(
+        ...,
+        gt=0,
+        le=MAX_AMOUNT,
+        description="Face value of the bond (must be > 0 and <= MAX_AMOUNT)",
+        examples=[1000, 10000],
+    )
     coupon_rate: float = Field(..., ge=0, le=1, description="Annual coupon rate as decimal (e.g., 0.05 for 5%)", examples=[0.05, 0.06])
     years_to_maturity: float = Field(..., gt=0, description="Years to maturity (must be > 0)", examples=[5, 10, 30])
-    current_price: float = Field(..., gt=0, description="Current market price of the bond (must be > 0)", examples=[950, 1050])
+    current_price: float = Field(
+        ...,
+        gt=0,
+        le=MAX_AMOUNT,
+        description="Current market price of the bond (must be > 0 and <= MAX_AMOUNT)",
+        examples=[950, 1050],
+    )
     payments_per_year: int = Field(2, ge=1, le=12, description="Number of coupon payments per year (default: 2 for semi-annual)", examples=[2, 4, 12])
     
     @field_validator('coupon_rate')
@@ -472,7 +503,10 @@ class BondYieldResponse(BaseModel):
 # XIRR Models
 class CashFlow(BaseModel):
     """Single cash flow entry."""
-    amount: float = Field(..., description="Cash flow amount (negative for outflow, positive for inflow)")
+    amount: float = Field(
+        ...,
+        description="Cash flow amount (negative for outflow, positive for inflow, abs(amount) <= MAX_AMOUNT)",
+    )
     date: str = Field(..., description="Date in YYYY-MM-DD format", examples=["2024-01-01", "2024-12-31"])
     
     @field_validator('date')
@@ -482,6 +516,13 @@ class CashFlow(BaseModel):
             datetime.strptime(v, "%Y-%m-%d")
         except ValueError:
             raise ValueError('date must be in YYYY-MM-DD format')
+        return v
+    
+    @field_validator("amount")
+    @classmethod
+    def validate_amount(cls, v: float) -> float:
+        if abs(v) > MAX_AMOUNT:
+            raise ValueError(f"amount absolute value must be <= {MAX_AMOUNT}")
         return v
 
 class XIRRRequest(BaseModel):
@@ -518,11 +559,6 @@ class XIRRResponse(BaseModel):
     """Response model for XIRR calculation."""
     ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
     xirr: float = Field(..., description="Extended Internal Rate of Return as decimal (e.g., 0.15 for 15%)", examples=[0.15, 0.20])
-
-# Constants for guards
-MAX_AMORTIZATION_MONTHS = 600
-MAX_XIRR_CASHFLOWS = 1000
-SOLVER_TIMEOUT_SECONDS = 5
 
 @app.post("/v1/mortgage/payment", 
           response_model=MortgagePaymentResponse,
