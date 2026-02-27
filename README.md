@@ -200,13 +200,19 @@ A simple web client is included in the `docs/` directory that can call the API f
 
 ### Setup Client
 
-1. **Update API URL** in `docs/app.js`:
+1. **Configure API URL** in `docs/app.js`:
    ```javascript
-   const API_BASE = "https://YOUR-RENDER-URL.onrender.com"; // Replace with your Render URL
+   // DEFAULT_PRODUCTION_URL is set to your Render deployment by default:
+   const DEFAULT_API_BASE = "https://YOUR-RENDER-URL.onrender.com";
    ```
 
 2. **Test locally**:
-- Open `docs/index.html` in your browser
+- Open `docs/index.html` in your browser, or serve it via:
+  ```bash
+  cd docs
+  python -m http.server 3000
+  # Then open http://localhost:3000
+  ```
    - Click "Check Health" or "Send Echo" buttons
    - Make sure your Render API is deployed and CORS is configured
 
@@ -230,6 +236,46 @@ A simple web client is included in the `docs/` directory that can call the API f
 4. **Verify Deployment**:
    - Your client will be available at: `https://<username>.github.io/<repo-name>/`
    - Or if using a custom domain: `https://yourdomain.com`
+
+### Overriding API base (for local dev or forks)
+
+The client supports overriding the API base via a query parameter and remembers it in `localStorage`:
+
+```text
+https://<username>.github.io/<repo-name>/?api=http://127.0.0.1:8000
+```
+
+This is useful when:
+- You run the API locally (FastAPI on `http://127.0.0.1:8000`)
+- You fork the repo and deploy your own backend
+
+Implementation outline in `docs/app.js`:
+
+```javascript
+const DEFAULT_API_BASE = "https://YOUR-RENDER-URL.onrender.com";
+
+function resolveApiBase() {
+  const params = new URLSearchParams(window.location.search);
+
+  // 1) Query param ?api=
+  const apiFromQuery = params.get("api");
+  if (apiFromQuery) {
+    localStorage.setItem("api_base", apiFromQuery);
+    return apiFromQuery;
+  }
+
+  // 2) localStorage fallback
+  const apiFromStorage = localStorage.getItem("api_base");
+  if (apiFromStorage) {
+    return apiFromStorage;
+  }
+
+  // 3) Default production URL
+  return DEFAULT_API_BASE;
+}
+
+const API_BASE = resolveApiBase();
+```
 
 ### Client Features
 
