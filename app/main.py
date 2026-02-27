@@ -680,10 +680,39 @@ def _calculate_bond_yield(face_value, coupon_rate, years_to_maturity, current_pr
         pv_face = face_value / ((1 + yield_rate / payments_per_year) ** total_payments)
         return pv_coupons + pv_face - current_price
     
+    # Common bracket for yield search
+    low, high = 0.0, 1.0
+
+    # Check for sign change before attempting a root find.
+    pv_low = bond_present_value(low)
+    pv_high = bond_present_value(high)
+
+    if abs(pv_low) < 1e-9:
+        return low
+    if abs(pv_high) < 1e-9:
+        return high
+
+    # If there is no sign change, there is no solution in [low, high].
+    if pv_low * pv_high > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "NO_SOLUTION",
+                    "message": "No bond yield solution in [0, 1] for the given inputs.",
+                    "details": [
+                        f"pv(low=0.0)={pv_low}",
+                        f"pv(high=1.0)={pv_high}",
+                    ],
+                },
+            },
+        )
+
     # Use scipy if available (more accurate)
     if SCIPY_AVAILABLE:
         try:
-            result = root_scalar(bond_present_value, bracket=[0.0, 1.0], method='brentq')
+            result = root_scalar(bond_present_value, bracket=[low, high], method="brentq")
             return result.root
         except ValueError:
             # Fallback to fsolve
@@ -691,7 +720,6 @@ def _calculate_bond_yield(face_value, coupon_rate, years_to_maturity, current_pr
             return float(result[0])
     else:
         # Fallback: Simple bisection method (no scipy required)
-        low, high = 0.0, 1.0
         tolerance = 1e-6
         max_iterations = 100
         
@@ -771,6 +799,9 @@ def calculate_bond_yield(payload: BondYieldRequest):
                 }
             }
         )
+    except HTTPException:
+        # Let HTTP exceptions bubble up so the unified handler can format them.
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -799,10 +830,43 @@ def _calculate_xirr(cashflows, initial_guess):
             total += cf.amount / ((1 + rate) ** years)
         return total
     
+    # Default bracket for XIRR search
+    low, high = -0.99, 10.0
+
+    # Adjust bounds if initial guess suggests different range
+    if 0 < initial_guess < 1:
+        low, high = -0.5, 2.0
+
+    # Check for sign change before attempting a root find.
+    pv_low = npv(low)
+    pv_high = npv(high)
+
+    if abs(pv_low) < 1e-9:
+        return low
+    if abs(pv_high) < 1e-9:
+        return high
+
+    if pv_low * pv_high > 0:
+        # No sign change within bracket → no solution in this range.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "NO_SOLUTION",
+                    "message": "No XIRR solution in the searched range for the given cashflows.",
+                    "details": [
+                        f"npv(low={low})={pv_low}",
+                        f"npv(high={high})={pv_high}",
+                    ],
+                },
+            },
+        )
+
     # Use scipy if available (more accurate)
     if SCIPY_AVAILABLE:
         try:
-            result = root_scalar(npv, bracket=[-0.99, 10.0], method='brentq', x0=initial_guess)
+            result = root_scalar(npv, bracket=[low, high], method="brentq", x0=initial_guess)
             return result.root
         except ValueError:
             # Fallback to fsolve
@@ -810,28 +874,33 @@ def _calculate_xirr(cashflows, initial_guess):
             return float(result[0])
     else:
         # Fallback: Simple bisection method (no scipy required)
-        low, high = -0.99, 10.0
         tolerance = 1e-6
         max_iterations = 100
-        
-        # Adjust bounds if initial guess suggests different range
-        if initial_guess > 0 and initial_guess < 1:
-            low, high = -0.5, 2.0
-        
+
         for _ in range(max_iterations):
             mid = (low + high) / 2
             npv_value = npv(mid)
-            
+
             if abs(npv_value) < tolerance:
                 return mid
-            
+
             if npv_value > 0:
                 low = mid
             else:
                 high = mid
-        
-        # Return best guess if convergence not reached
-        return (low + high) / 2
+
+        # No convergence within max_iterations: treat as no solution
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "ok": False,
+                "error": {
+                    "code": "NO_SOLUTION",
+                    "message": "No XIRR solution found within iteration limit.",
+                    "details": [],
+                },
+            },
+        )
 
 @app.post("/v1/xirr", 
           response_model=XIRRResponse,
@@ -895,7 +964,7 @@ def calculate_xirr(payload: XIRRRequest):
                 payload.initial_guess
             )
             xirr_result = future.result(timeout=SOLVER_TIMEOUT_SECONDS)
-            
+
         return {"ok": True, "xirr": round(xirr_result, 6)}
     except FutureTimeoutError:
         raise HTTPException(
@@ -909,6 +978,9 @@ def calculate_xirr(payload: XIRRRequest):
                 }
             }
         )
+    except HTTPException:
+        # Let HTTP exceptions bubble up so the unified handler can format them.
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
