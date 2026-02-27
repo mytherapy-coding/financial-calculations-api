@@ -146,6 +146,103 @@ class FutureValueResponse(BaseModel):
     ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
     future_value: float = Field(..., description="Calculated future value rounded to 2 decimal places", examples=[19671.51, 12762.82])
 
+
+class PresentValueRequest(BaseModel):
+    """Request model for present value calculation from a future value.
+
+    Note: annual_rate is a decimal (e.g., 0.07 for 7%, not 7).
+    """
+
+    future_value: float = Field(
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Future value amount (must be >= 0 and <= MAX_AMOUNT)",
+        examples=[10000, 5000, 25000],
+    )
+    annual_rate: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="Annual discount rate as decimal (e.g., 0.07 for 7%)",
+        examples=[0.07, 0.05, 0.10],
+    )
+    years: float = Field(
+        ...,
+        gt=0,
+        description="Number of years (must be > 0)",
+        examples=[10, 5, 20, 30],
+    )
+    compounds_per_year: int = Field(
+        ...,
+        gt=0,
+        description="Number of compounding periods per year (e.g., 12 for monthly, 4 for quarterly, 1 for annually)",
+        examples=[12, 4, 1, 365],
+    )
+
+    @field_validator("annual_rate")
+    @classmethod
+    def validate_rate(cls, v):
+        if v < 0:
+            raise ValueError("annual_rate must be >= 0")
+        if v > 1:
+            raise ValueError("annual_rate must be <= 1 (100%). If you meant a percentage, convert to decimal (e.g., 7% = 0.07)")
+        return v
+
+
+class PresentValueResponse(BaseModel):
+    """Response model for present value calculation."""
+
+    ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
+    present_value: float = Field(..., description="Calculated present value rounded to 2 decimal places", examples=[5083.49])
+
+
+class AnnuityPaymentRequest(BaseModel):
+    """Request model for level annuity payment calculation."""
+
+    present_value: float = Field(
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Present value (PV) of the annuity (must be >= 0 and <= MAX_AMOUNT)",
+        examples=[10000, 50000],
+    )
+    annual_rate: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="Annual interest rate as decimal (e.g., 0.05 for 5%)",
+        examples=[0.05, 0.07],
+    )
+    years: float = Field(
+        ...,
+        gt=0,
+        description="Number of years (must be > 0)",
+        examples=[5, 10, 30],
+    )
+    payments_per_year: int = Field(
+        ...,
+        gt=0,
+        description="Number of annuity payments per year (e.g., 12 for monthly, 4 for quarterly, 1 for annually)",
+        examples=[12, 4, 1],
+    )
+
+    @field_validator("annual_rate")
+    @classmethod
+    def validate_rate(cls, v):
+        if v < 0:
+            raise ValueError("annual_rate must be >= 0")
+        if v > 1:
+            raise ValueError("annual_rate must be <= 1 (100%). If you meant a percentage, convert to decimal (e.g., 7% = 0.07)")
+        return v
+
+
+class AnnuityPaymentResponse(BaseModel):
+    """Response model for level annuity payment calculation."""
+
+    ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
+    payment: float = Field(..., description="Level payment amount rounded to 2 decimal places", examples=[212.13])
+
 # Exception Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -370,6 +467,86 @@ def calculate_future_value(payload: FutureValueRequest):
     future_value = round(future_value, 2)
     
     return {"ok": True, "future_value": future_value}
+
+
+@app.post(
+    "/v1/tvm/present-value",
+    response_model=PresentValueResponse,
+    summary="Calculate Present Value",
+    description="Calculate the present value of a future amount using compound discounting.",
+    response_description="Calculated present value",
+    tags=["Time Value of Money"],
+)
+def calculate_present_value(payload: PresentValueRequest):
+    """
+    Calculate the present value of a future amount.
+
+    Formula: PV = FV / (1 + r/n)^(n × t)
+
+    Where:
+    - **FV** = future value
+    - **r** = annual_rate (as decimal, e.g., 0.07 for 7%)
+    - **n** = compounds_per_year
+    - **t** = years
+    """
+    future_value = payload.future_value
+    annual_rate = payload.annual_rate
+    years = payload.years
+    compounds_per_year = payload.compounds_per_year
+
+    if annual_rate == 0 or compounds_per_year == 0:
+        present_value = future_value
+    else:
+        rate_per_period = annual_rate / compounds_per_year
+        total_periods = compounds_per_year * years
+        present_value = future_value / (1 + rate_per_period) ** total_periods
+
+    return {
+        "ok": True,
+        "present_value": round(present_value, 2),
+    }
+
+
+@app.post(
+    "/v1/tvm/annuity-payment",
+    response_model=AnnuityPaymentResponse,
+    summary="Calculate Annuity Payment",
+    description="Calculate the level payment amount for a fixed-term annuity.",
+    response_description="Annuity payment amount",
+    tags=["Time Value of Money"],
+)
+def calculate_annuity_payment(payload: AnnuityPaymentRequest):
+    """
+    Calculate the level payment amount for a fixed-term annuity.
+
+    Uses the standard annuity payment formula:
+    Pmt = PV × [r(1+r)^n] / [(1+r)^n - 1]
+
+    Where:
+    - **Pmt** = periodic payment
+    - **PV** = present_value
+    - **r** = periodic interest rate (annual_rate / payments_per_year)
+    - **n** = total number of payments (years × payments_per_year)
+    """
+    present_value = payload.present_value
+    annual_rate = payload.annual_rate
+    years = payload.years
+    payments_per_year = payload.payments_per_year
+
+    periodic_rate = annual_rate / payments_per_year
+    total_payments = int(years * payments_per_year)
+
+    if periodic_rate == 0:
+        payment = present_value / total_payments
+    else:
+        payment = present_value * (
+            periodic_rate * (1 + periodic_rate) ** total_payments
+        ) / ((1 + periodic_rate) ** total_payments - 1)
+
+    return {
+        "ok": True,
+        "payment": round(payment, 2),
+    }
 
 # Mortgage Models
 class MortgagePaymentRequest(BaseModel):
