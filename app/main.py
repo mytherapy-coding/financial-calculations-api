@@ -653,6 +653,84 @@ class MortgageSummaryResponse(BaseModel):
         examples=["2054-01"],
     )
 
+
+class MortgageWithExtraPaymentsRequest(BaseModel):
+    """Request model for mortgage calculation with extra payments."""
+
+    principal: float = Field(
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Loan principal amount (must be >= 0 and <= MAX_AMOUNT)",
+        examples=[300000, 500000],
+    )
+    annual_rate: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="Annual interest rate as decimal (e.g., 0.04 for 4%)",
+        examples=[0.04, 0.05, 0.06],
+    )
+    years: float = Field(..., gt=0, description="Loan term in years (must be > 0)", examples=[15, 30])
+    extra_monthly_payment: float = Field(
+        ...,
+        ge=0,
+        le=MAX_AMOUNT,
+        description="Extra payment amount to apply to principal each month (must be >= 0)",
+        examples=[100, 200, 500],
+    )
+
+    @field_validator("annual_rate")
+    @classmethod
+    def validate_rate(cls, v):
+        if v < 0:
+            raise ValueError("annual_rate must be >= 0")
+        if v > 1:
+            raise ValueError("annual_rate must be <= 1 (100%)")
+        return v
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "principal": 300000,
+                "annual_rate": 0.04,
+                "years": 30,
+                "extra_monthly_payment": 200,
+            }
+        }
+
+
+class MortgageWithExtraPaymentsResponse(BaseModel):
+    """Response model for mortgage with extra payments calculation."""
+
+    ok: bool = Field(..., description="Indicates if the calculation was successful", examples=[True])
+    regular_monthly_payment: float = Field(
+        ..., description="Regular monthly payment (without extra)", examples=[1432.25]
+    )
+    total_monthly_payment: float = Field(
+        ..., description="Total monthly payment (regular + extra)", examples=[1632.25]
+    )
+    original_payoff_months: int = Field(
+        ..., description="Original payoff months (without extra payments)", examples=[360]
+    )
+    new_payoff_months: int = Field(
+        ..., description="New payoff months (with extra payments)", examples=[280]
+    )
+    months_saved: int = Field(..., description="Number of months saved", examples=[80])
+    original_total_interest: float = Field(
+        ..., description="Total interest paid without extra payments", examples=[215610.0]
+    )
+    new_total_interest: float = Field(
+        ..., description="Total interest paid with extra payments", examples=[165432.0]
+    )
+    interest_saved: float = Field(..., description="Total interest saved", examples=[50178.0])
+    new_payoff_date: str = Field(
+        ...,
+        description="Estimated payoff date with extra payments (YYYY-MM format)",
+        examples=["2046-05"],
+    )
+
+
 # Bond Models
 class BondYieldRequest(BaseModel):
     """Request model for bond yield calculation."""
@@ -1037,6 +1115,122 @@ def mortgage_summary(payload: MortgageSummaryRequest):
         "payoff_months": payoff_months,
         "payoff_date": payoff_date_str,
     }
+
+
+@app.post(
+    "/v1/mortgage/with-extra-payments",
+    response_model=MortgageWithExtraPaymentsResponse,
+    summary="Calculate Mortgage with Extra Payments",
+    description=(
+        "Calculate mortgage payoff scenario with extra monthly payments. "
+        "Shows how extra payments reduce payoff time and total interest."
+    ),
+    response_description="Mortgage analysis with extra payments",
+    tags=["Mortgage"],
+)
+def mortgage_with_extra_payments(payload: MortgageWithExtraPaymentsRequest):
+    """
+    Calculate mortgage payoff with extra monthly payments.
+
+    This endpoint shows the impact of making extra principal payments each month:
+    - How many months you'll save
+    - How much interest you'll save
+    - New payoff date
+
+    **Example Request:**
+    ```json
+    {
+        "principal": 300000,
+        "annual_rate": 0.04,
+        "years": 30,
+        "extra_monthly_payment": 200
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+        "ok": true,
+        "regular_monthly_payment": 1432.25,
+        "total_monthly_payment": 1632.25,
+        "original_payoff_months": 360,
+        "new_payoff_months": 280,
+        "months_saved": 80,
+        "original_total_interest": 215610.0,
+        "new_total_interest": 165432.0,
+        "interest_saved": 50178.0,
+        "new_payoff_date": "2046-05"
+    }
+    ```
+    """
+    principal = payload.principal
+    annual_rate = payload.annual_rate
+    years = payload.years
+    extra_payment = payload.extra_monthly_payment
+
+    monthly_rate = annual_rate / 12
+    original_payoff_months = int(years * 12)
+
+    # Calculate regular monthly payment
+    if monthly_rate == 0:
+        regular_monthly_payment = principal / original_payoff_months
+    else:
+        regular_monthly_payment = principal * (monthly_rate * (1 + monthly_rate) ** original_payoff_months) / (
+            (1 + monthly_rate) ** original_payoff_months - 1
+        )
+
+    total_monthly_payment = regular_monthly_payment + extra_payment
+
+    # Calculate original scenario (without extra payments)
+    original_total_paid = regular_monthly_payment * original_payoff_months
+    original_total_interest = original_total_paid - principal
+
+    # Simulate payments with extra payments to find new payoff
+    balance = principal
+    new_payoff_months = 0
+    new_total_paid = 0.0
+    max_months = original_payoff_months * 2  # Safety limit
+
+    while balance > 0.01 and new_payoff_months < max_months:
+        new_payoff_months += 1
+        interest_payment = balance * monthly_rate
+        principal_payment = regular_monthly_payment - interest_payment
+        extra_principal = extra_payment
+
+        # Apply extra payment to principal
+        total_principal_payment = principal_payment + extra_principal
+        balance -= total_principal_payment
+        new_total_paid += regular_monthly_payment + extra_payment
+
+    if balance < 0:
+        # Adjust for overpayment in last month
+        new_total_paid += balance
+        balance = 0
+
+    new_total_interest = new_total_paid - principal
+    months_saved = original_payoff_months - new_payoff_months
+    interest_saved = original_total_interest - new_total_interest
+
+    # Calculate new payoff date
+    today = date.today().replace(day=1)
+    total_month_index = (today.year * 12 + (today.month - 1)) + (new_payoff_months - 1)
+    payoff_year = total_month_index // 12
+    payoff_month = total_month_index % 12 + 1
+    new_payoff_date = f"{payoff_year:04d}-{payoff_month:02d}"
+
+    return {
+        "ok": True,
+        "regular_monthly_payment": round(regular_monthly_payment, 2),
+        "total_monthly_payment": round(total_monthly_payment, 2),
+        "original_payoff_months": original_payoff_months,
+        "new_payoff_months": new_payoff_months,
+        "months_saved": months_saved,
+        "original_total_interest": round(original_total_interest, 2),
+        "new_total_interest": round(new_total_interest, 2),
+        "interest_saved": round(interest_saved, 2),
+        "new_payoff_date": new_payoff_date,
+    }
+
 
 def _calculate_bond_yield(face_value, coupon_rate, years_to_maturity, current_price, payments_per_year):
     """Calculate bond yield to maturity using numerical solver."""
