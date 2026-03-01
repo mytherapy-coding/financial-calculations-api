@@ -136,16 +136,40 @@ The server will start at `http://127.0.0.1:8000`
 
 ## Testing
 
+The project has **comprehensive test coverage** with **91+ test functions** across 11 test files:
+
+- ✅ **All endpoints covered**: Every API endpoint has dedicated tests
+- ✅ **Error handling**: Validation errors, business logic errors, guards
+- ✅ **Edge cases**: Boundary conditions, extreme values, zero cases
+- ✅ **Integration tests**: Round-trip operations and consistency checks
+- ✅ **Response format**: All tests verify standard response structure
+
+See [TEST_COVERAGE.md](TEST_COVERAGE.md) for detailed coverage documentation.
+
+### Run Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov=app --cov-report=html
+
+# Run specific test file
+pytest tests/test_health.py
+```
+
 ### Interactive API Documentation (Swagger UI)
 Open in your browser: http://127.0.0.1:8000/docs
 
-### Health Check
+### Manual Testing Examples
+
+**Health Check:**
 ```bash
 curl http://127.0.0.1:8000/v1/health
 ```
 
-### Echo Endpoint
-Test via Swagger UI at `/docs` or use curl:
+**Echo Endpoint:**
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/echo \
   -H "Content-Type: application/json" \
