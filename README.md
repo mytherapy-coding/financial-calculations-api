@@ -69,6 +69,530 @@ Visit `/docs` in your browser for interactive Swagger UI documentation:
 - Local: http://127.0.0.1:8000/docs
 - Production: https://YOUR-RENDER-URL.onrender.com/docs
 
+## Client Documentation
+
+This section provides comprehensive documentation for developers using this API.
+
+### Base URL
+
+- **Production**: `https://YOUR-RENDER-URL.onrender.com`
+- **Local Development**: `http://127.0.0.1:8000`
+
+All endpoints are prefixed with `/v1/`.
+
+### Authentication
+
+This API does not require authentication. All endpoints are publicly accessible.
+
+### Request Format
+
+All requests should use:
+- **Content-Type**: `application/json`
+- **Method**: `POST` (for calculation endpoints) or `GET` (for info endpoints)
+
+### Response Format
+
+All successful responses follow this format:
+```json
+{
+  "ok": true,
+  "result_field": value
+}
+```
+
+All error responses follow this format:
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": ["Additional error details"]
+  }
+}
+```
+
+### HTTP Status Codes
+
+- `200 OK`: Request successful
+- `400 Bad Request`: Invalid input or business logic error (e.g., NO_SOLUTION)
+- `408 Request Timeout`: Solver exceeded timeout (5 seconds)
+- `422 Unprocessable Entity`: Validation error (invalid field types, missing required fields)
+- `500 Internal Server Error`: Server error
+
+### Rate Limits
+
+Currently, there are no rate limits. However, please use the API responsibly.
+
+### Error Handling
+
+Always check the `ok` field in the response:
+
+```javascript
+const response = await fetch('https://api.example.com/v1/tvm/future-value', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    principal: 10000,
+    annual_rate: 0.07,
+    years: 10,
+    compounds_per_year: 12
+  })
+});
+
+const data = await response.json();
+
+if (data.ok) {
+  console.log('Future value:', data.future_value);
+} else {
+  console.error('Error:', data.error.message);
+  console.error('Details:', data.error.details);
+}
+```
+
+### Common Error Codes
+
+- `VALIDATION_ERROR`: Request validation failed (missing fields, invalid types, out of range)
+- `NO_SOLUTION`: Numerical solver could not find a solution (bond yield, XIRR)
+- `SOLVER_TIMEOUT`: Calculation exceeded 5-second timeout
+- `TOO_MANY_CASHFLOWS`: XIRR request exceeds 1000 cashflows limit
+- `TOO_MANY_MONTHS`: Amortization schedule exceeds 600 months limit
+
+### API Endpoints Reference
+
+#### 1. Health Check
+**GET** `/v1/health`
+
+Check if the API is running.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "service": "finance-api",
+  "version": "v1"
+}
+```
+
+#### 2. Service Info
+**GET** `/v1/info`
+
+Get service metadata (version, environment, build timestamp).
+
+**Response:**
+```json
+{
+  "ok": true,
+  "service": "finance-api",
+  "version": "1.0.0",
+  "environment": "production",
+  "build_timestamp": "2024-01-01T00:00:00",
+  "git_sha": "abc123"
+}
+```
+
+#### 3. Echo
+**POST** `/v1/echo`
+
+Echo back the request payload (useful for testing).
+
+**Request:**
+```json
+{
+  "message": "Hello, World!",
+  "number": 42
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "echo": {
+    "message": "Hello, World!",
+    "number": 42
+  }
+}
+```
+
+#### 4. Future Value (Compound Interest)
+**POST** `/v1/tvm/future-value`
+
+Calculate the future value of an investment using compound interest.
+
+**Request:**
+```json
+{
+  "principal": 10000,
+  "annual_rate": 0.07,
+  "years": 10,
+  "compounds_per_year": 12
+}
+```
+
+**Fields:**
+- `principal` (float, required): Initial investment amount (≥ 0, ≤ 1e12)
+- `annual_rate` (float, required): Annual interest rate as decimal (0.07 = 7%, range: 0-1)
+- `years` (float, required): Number of years (> 0)
+- `compounds_per_year` (int, required): Compounding frequency (1=annual, 12=monthly, 365=daily)
+
+**Response:**
+```json
+{
+  "ok": true,
+  "future_value": 19671.51
+}
+```
+
+#### 5. Present Value
+**POST** `/v1/tvm/present-value`
+
+Calculate the present value of a future amount.
+
+**Request:**
+```json
+{
+  "future_value": 10000,
+  "annual_rate": 0.07,
+  "years": 10,
+  "compounds_per_year": 12
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "present_value": 5083.49
+}
+```
+
+#### 6. Annuity Payment
+**POST** `/v1/tvm/annuity-payment`
+
+Calculate the level payment amount for a fixed-term annuity.
+
+**Request:**
+```json
+{
+  "present_value": 10000,
+  "annual_rate": 0.05,
+  "years": 5,
+  "payments_per_year": 12
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "payment": 188.71
+}
+```
+
+#### 7. Mortgage Payment
+**POST** `/v1/mortgage/payment`
+
+Calculate monthly payment for a fixed-rate mortgage.
+
+**Request:**
+```json
+{
+  "principal": 300000,
+  "annual_rate": 0.04,
+  "years": 30
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "monthly_payment": 1432.25
+}
+```
+
+#### 8. Amortization Schedule
+**POST** `/v1/mortgage/amortization-schedule`
+
+Generate detailed amortization schedule (limited to 600 months).
+
+**Request:**
+```json
+{
+  "principal": 300000,
+  "annual_rate": 0.04,
+  "years": 30,
+  "max_months": 360
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "monthly_payment": 1432.25,
+  "total_payments": 360,
+  "schedule": [
+    {
+      "month": 1,
+      "payment": 1432.25,
+      "principal_payment": 432.25,
+      "interest_payment": 1000.00,
+      "remaining_balance": 299567.75
+    },
+    ...
+  ]
+}
+```
+
+#### 9. Mortgage Summary
+**POST** `/v1/mortgage/summary`
+
+Get key mortgage metrics (payment, total paid, interest, payoff date).
+
+**Request:**
+```json
+{
+  "principal": 300000,
+  "annual_rate": 0.04,
+  "years": 30
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "monthly_payment": 1432.25,
+  "total_paid": 515610.0,
+  "total_interest": 215610.0,
+  "payoff_months": 360,
+  "payoff_date": "2054-01"
+}
+```
+
+#### 10. Mortgage with Extra Payments
+**POST** `/v1/mortgage/with-extra-payments`
+
+Calculate mortgage impact of making extra principal payments.
+
+**Request:**
+```json
+{
+  "principal": 300000,
+  "annual_rate": 0.04,
+  "years": 30,
+  "extra_monthly_payment": 200
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "regular_monthly_payment": 1432.25,
+  "total_monthly_payment": 1632.25,
+  "original_payoff_months": 360,
+  "new_payoff_months": 280,
+  "months_saved": 80,
+  "original_total_interest": 215610.0,
+  "new_total_interest": 165432.0,
+  "interest_saved": 50178.0,
+  "new_payoff_date": "2046-05"
+}
+```
+
+#### 11. Bond Yield to Maturity
+**POST** `/v1/bond/yield`
+
+Calculate yield to maturity for a bond.
+
+**Request:**
+```json
+{
+  "face_value": 1000,
+  "coupon_rate": 0.05,
+  "years_to_maturity": 10,
+  "current_price": 950,
+  "payments_per_year": 2
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "yield_to_maturity": 0.055
+}
+```
+
+#### 12. Bond Price from Yield
+**POST** `/v1/bond/price`
+
+Calculate bond price given yield to maturity.
+
+**Request:**
+```json
+{
+  "face_value": 1000,
+  "coupon_rate": 0.05,
+  "years_to_maturity": 10,
+  "yield_to_maturity": 0.055,
+  "payments_per_year": 2
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "price": 980.50
+}
+```
+
+#### 13. XIRR (Extended Internal Rate of Return)
+**POST** `/v1/xirr`
+
+Calculate XIRR for irregular cash flows with dates.
+
+**Request:**
+```json
+{
+  "cashflows": [
+    {"amount": -10000, "date": "2024-01-01"},
+    {"amount": 2000, "date": "2024-06-30"},
+    {"amount": 3000, "date": "2024-12-31"},
+    {"amount": 5000, "date": "2025-12-31"}
+  ],
+  "initial_guess": 0.1
+}
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "xirr": 0.15
+}
+```
+
+#### 14. XIRR Explain
+**POST** `/v1/xirr/explain`
+
+Calculate XIRR with detailed solver metadata.
+
+**Request:** Same as `/v1/xirr`
+
+**Response:**
+```json
+{
+  "ok": true,
+  "xirr": 0.15,
+  "iterations": 25,
+  "solver_type": "scipy-brentq",
+  "warnings": []
+}
+```
+
+### Code Examples
+
+#### JavaScript/TypeScript
+
+```javascript
+const API_BASE = 'https://YOUR-RENDER-URL.onrender.com';
+
+async function calculateFutureValue(principal, rate, years) {
+  const response = await fetch(`${API_BASE}/v1/tvm/future-value`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      principal,
+      annual_rate: rate,
+      years,
+      compounds_per_year: 12
+    })
+  });
+  
+  const data = await response.json();
+  
+  if (!data.ok) {
+    throw new Error(data.error.message);
+  }
+  
+  return data.future_value;
+}
+
+// Usage
+calculateFutureValue(10000, 0.07, 10)
+  .then(fv => console.log('Future value:', fv))
+  .catch(err => console.error('Error:', err));
+```
+
+#### Python
+
+```python
+import requests
+
+API_BASE = 'https://YOUR-RENDER-URL.onrender.com'
+
+def calculate_future_value(principal, rate, years):
+    response = requests.post(
+        f'{API_BASE}/v1/tvm/future-value',
+        json={
+            'principal': principal,
+            'annual_rate': rate,
+            'years': years,
+            'compounds_per_year': 12
+        }
+    )
+    
+    data = response.json()
+    
+    if not data['ok']:
+        raise Exception(data['error']['message'])
+    
+    return data['future_value']
+
+# Usage
+try:
+    fv = calculate_future_value(10000, 0.07, 10)
+    print(f'Future value: {fv}')
+except Exception as e:
+    print(f'Error: {e}')
+```
+
+#### cURL
+
+```bash
+curl -X POST https://YOUR-RENDER-URL.onrender.com/v1/tvm/future-value \
+  -H "Content-Type: application/json" \
+  -d '{
+    "principal": 10000,
+    "annual_rate": 0.07,
+    "years": 10,
+    "compounds_per_year": 12
+  }'
+```
+
+### Important Notes
+
+1. **Rate Format**: All rates are decimals (0.07 = 7%, not 7)
+2. **Amount Limits**: Maximum amount is 1e12 (1 trillion)
+3. **Date Format**: Use `YYYY-MM-DD` format for dates
+4. **Precision**: Results are rounded to 2-6 decimal places depending on the endpoint
+5. **Timeouts**: Solver endpoints (bond yield, XIRR) have a 5-second timeout
+6. **CORS**: API supports CORS for web applications
+
+### Best Practices
+
+1. **Always check `ok` field** before using results
+2. **Handle errors gracefully** - display user-friendly messages
+3. **Validate inputs client-side** before sending requests
+4. **Cache results** when appropriate to reduce API calls
+5. **Use appropriate precision** - don't display more decimals than meaningful
+6. **Respect rate limits** (if implemented in the future)
+
 ## Setup
 
 ### 1. Create virtual environment
