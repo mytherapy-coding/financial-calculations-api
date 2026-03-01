@@ -276,3 +276,72 @@ def test_mortgage_with_extra_payments_structure():
     # Check date format (YYYY-MM)
     assert len(data["new_payoff_date"]) == 7
     assert data["new_payoff_date"][4] == "-"
+
+
+def test_mortgage_summary_basic():
+    """Test basic mortgage summary calculation."""
+    payload = {
+        "principal": 300000,
+        "annual_rate": 0.04,
+        "years": 30
+    }
+    response = client.post("/v1/mortgage/summary", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert "monthly_payment" in data
+    assert "total_paid" in data
+    assert "total_interest" in data
+    assert "payoff_months" in data
+    assert "payoff_date" in data
+    
+    # Verify calculations
+    assert data["monthly_payment"] > 0
+    assert data["total_paid"] > data["principal"]
+    assert data["total_interest"] > 0
+    assert data["payoff_months"] == 360
+    assert data["total_paid"] == data["monthly_payment"] * data["payoff_months"]
+
+
+def test_mortgage_summary_structure():
+    """Test that mortgage summary response has all required fields."""
+    payload = {
+        "principal": 200000,
+        "annual_rate": 0.035,
+        "years": 15
+    }
+    response = client.post("/v1/mortgage/summary", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    
+    required_fields = [
+        "ok",
+        "monthly_payment",
+        "total_paid",
+        "total_interest",
+        "payoff_months",
+        "payoff_date"
+    ]
+    for field in required_fields:
+        assert field in data, f"Missing field: {field}"
+    
+    # Check date format
+    assert len(data["payoff_date"]) == 7
+    assert data["payoff_date"][4] == "-"
+
+
+def test_mortgage_summary_zero_interest():
+    """Test mortgage summary with zero interest."""
+    payload = {
+        "principal": 100000,
+        "annual_rate": 0.0,
+        "years": 10
+    }
+    response = client.post("/v1/mortgage/summary", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    
+    # With zero interest, total_interest should be 0
+    assert data["total_interest"] == 0
+    assert data["total_paid"] == payload["principal"]
+    assert data["monthly_payment"] == payload["principal"] / (payload["years"] * 12)
