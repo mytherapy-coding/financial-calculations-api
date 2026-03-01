@@ -2,6 +2,8 @@
 
 Stateless JSON API for financial calculations built with FastAPI.
 
+> 📖 **Architecture Documentation**: See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed information about the project structure and design patterns.
+
 ## Quickstart
 
 ### Health Check
@@ -230,7 +232,7 @@ A simple web client is included in the `docs/` directory that can call the API f
 
 3. **Update CORS in Backend**:
    - The backend already includes CORS middleware
-   - Make sure your GitHub Pages URL is in the `ALLOWED_ORIGINS` list in `app/main.py`
+   - Make sure your GitHub Pages URL is in the `ALLOWED_ORIGINS` list in `app/core/config.py`
    - Example: `"https://mytherapy-coding.github.io"`
 
 4. **Verify Deployment**:
@@ -296,7 +298,7 @@ By default, the following origins are allowed:
 - GitHub Pages for this project:
   - `https://mytherapy-coding.github.io`
 
-If you add another frontend (for example, a different GitHub Pages site or a custom domain), update `ALLOWED_ORIGINS` in `app/main.py`:
+If you add another frontend (for example, a different GitHub Pages site or a custom domain), update `ALLOWED_ORIGINS` in `app/core/config.py`:
 
 ```python
 ALLOWED_ORIGINS = [
@@ -329,13 +331,42 @@ ALLOWED_ORIGINS = [
 financial-calculations-api/
 ├── app/
 │   ├── __init__.py
-│   └── main.py
-├── docs/                 # Web client (served by GitHub Pages)
+│   ├── main.py              # FastAPI app entry point
+│   ├── core/                # Core configuration and error handling
+│   │   ├── config.py        # Constants, CORS, metadata
+│   │   └── errors.py        # Exception handlers
+│   ├── models/              # Pydantic request/response models
+│   │   ├── common.py        # Common models (Error, Echo)
+│   │   ├── tvm.py           # Time Value of Money models
+│   │   ├── mortgage.py      # Mortgage calculation models
+│   │   ├── bonds.py         # Bond calculation models
+│   │   └── xirr.py          # XIRR calculation models
+│   ├── services/            # Pure business logic (no FastAPI dependencies)
+│   │   ├── tvm.py           # TVM calculation services
+│   │   ├── mortgage.py      # Mortgage calculation services
+│   │   ├── bonds.py         # Bond calculation services
+│   │   └── xirr.py          # XIRR calculation services
+│   └── api/
+│       └── routes/           # FastAPI route handlers
+│           ├── system.py    # Health, echo, info endpoints
+│           ├── tvm.py        # TVM endpoints
+│           ├── mortgage.py   # Mortgage endpoints
+│           ├── bonds.py      # Bond endpoints
+│           └── xirr.py       # XIRR endpoints
+├── docs/                    # Web client (served by GitHub Pages)
 │   ├── index.html
 │   ├── app.js
 │   └── style.css
-├── tests/                # Pytest test suite
-├── .github/workflows/    # CI workflow
+├── tests/                   # Pytest test suite
+│   ├── test_health.py
+│   ├── test_echo.py
+│   ├── test_future_value.py
+│   ├── test_tvm.py
+│   ├── test_mortgage.py
+│   ├── test_bond.py
+│   ├── test_xirr.py
+│   └── test_info.py
+├── .github/workflows/       # CI workflow
 ├── CONCEPTS.md
 ├── DEPLOY.md
 ├── LICENSE
@@ -344,3 +375,19 @@ financial-calculations-api/
 ├── render.yaml
 └── requirements.txt
 ```
+
+### Architecture
+
+The project follows a **modular architecture** with clear separation of concerns:
+
+- **`app/main.py`**: FastAPI application initialization, middleware, exception handlers, and router registration (34 lines)
+- **`app/core/`**: Shared configuration and error handling
+- **`app/models/`**: Pydantic models for request/response validation
+- **`app/services/`**: Pure business logic functions (no FastAPI dependencies, easily testable)
+- **`app/api/routes/`**: FastAPI route handlers that call services and return HTTP responses
+
+This architecture provides:
+- **Separation of concerns**: Routes → Services → Models
+- **Testability**: Services can be tested independently without FastAPI
+- **Scalability**: Easy to add new endpoints and domains
+- **Maintainability**: Changes are isolated to specific modules
