@@ -297,7 +297,7 @@ def test_mortgage_summary_basic():
     
     # Verify calculations
     assert data["monthly_payment"] > 0
-    assert data["total_paid"] > data["principal"]
+    assert data["total_paid"] > payload["principal"]
     assert data["total_interest"] > 0
     assert data["payoff_months"] == 360
     assert data["total_paid"] == data["monthly_payment"] * data["payoff_months"]
