@@ -357,15 +357,18 @@ financial-calculations-api/
 │   ├── index.html
 │   ├── app.js
 │   └── style.css
-├── tests/                   # Pytest test suite
-│   ├── test_health.py
-│   ├── test_echo.py
-│   ├── test_future_value.py
-│   ├── test_tvm.py
-│   ├── test_mortgage.py
-│   ├── test_bond.py
-│   ├── test_xirr.py
-│   └── test_info.py
+├── tests/                   # Pytest test suite (91+ tests)
+│   ├── test_health.py       # Health check tests
+│   ├── test_echo.py         # Echo endpoint tests
+│   ├── test_info.py         # Info endpoint tests
+│   ├── test_future_value.py # Future value tests
+│   ├── test_tvm.py          # TVM (present value, annuity) tests
+│   ├── test_mortgage.py     # Mortgage calculation tests
+│   ├── test_bond.py         # Bond calculation tests
+│   ├── test_xirr.py         # XIRR calculation tests
+│   ├── test_error_handling.py # Error handling and validation tests
+│   ├── test_integration.py  # Integration and round-trip tests
+│   └── test_edge_cases.py   # Edge cases and boundary tests
 ├── .github/workflows/       # CI workflow
 ├── CONCEPTS.md
 ├── DEPLOY.md
