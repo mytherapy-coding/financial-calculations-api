@@ -11,6 +11,14 @@ ALLOWED_ORIGINS = [
     # Local static client (python -m http.server 3000)
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Vite dev server (default ports)
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    # Create React App / Next.js dev servers
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
     # GitHub Pages for this project
     "https://mytherapy-coding.github.io",
 ]
